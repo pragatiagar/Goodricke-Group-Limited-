@@ -137,6 +137,7 @@ function pd(s)      { return new Date(s + 'T12:00:00'); }
 function fmtDate(d) { return pd(d).toLocaleDateString('en-GB', { day:'numeric', month:'short', year:'numeric' }); }
 function fmtShort(d){ return pd(d).toLocaleDateString('en-GB', { day:'numeric', month:'short' }); }
 function uid()      { return '_' + Math.random().toString(36).slice(2,9); }
+function addDays(dateStr, n) { const d = pd(dateStr); d.setDate(d.getDate() + n); return d.toISOString().slice(0,10); }
 
 /* ── DELIVERABLE STATUS GROUPS ── */
 function getStatusGroup(s) {
@@ -472,14 +473,35 @@ function EditableText({ value, onChange, style, placeholder, editMode, multiline
 /* ═══════════════════════════════════════
    EDIT MODAL (all types)
 ═══════════════════════════════════════ */
-function EditModal({ modal, onClose, onSave, onDelete, phases }) {
+function EditModal({ modal, onClose, onSave, onDelete, phases, deliverables, meetings, presentations, deps, onShiftDates }) {
   const T = useContext(ThemeCtx);
   const [draft, setDraft] = useState({ ...modal.item });
+  const [shiftLinked, setShiftLinked] = useState(true);
   const up = (k, v) => setDraft(p => ({ ...p, [k]: v }));
 
   const inputStyle = { background:T.surface, border:`1px solid ${T.border}`, color:T.text1 };
   const typeLabels = { phase:'Phase', team:'Team Member', meeting:'Meeting', deliverable:'Deliverable', dep:'Input Required', activity:'Update', link:'Link' };
   const label = typeLabels[modal.type] || modal.type;
+
+  /* ── Linked-date shift (phase end date changed) ── */
+  const phaseDiff = (modal.type === 'phase' && !modal.isNew && modal.item.end && draft.end)
+    ? Math.round((pd(draft.end) - pd(modal.item.end)) / 86400000)
+    : 0;
+  const phaseLinkedCount = (() => {
+    if (modal.type !== 'phase' || modal.isNew || phaseDiff === 0) return 0;
+    const ps = pd(modal.item.start), pe = new Date(pd(modal.item.end).getTime() + 86400000);
+    const linkedDelivs = deliverables.filter(d => d.phase === modal.item.name).length;
+    const linkedMtgs   = meetings.filter(m => meetingPhaseId(m) === modal.item.id).length;
+    const linkedPres   = presentations.filter(p => { const dt = pd(p.date); return dt >= ps && dt <= pe; }).length;
+    const linkedDeps   = deps.filter(d => { if (!d.due) return false; const dt = pd(d.due); return dt >= ps && dt <= pe; }).length;
+    return linkedDelivs + linkedMtgs + linkedPres + linkedDeps;
+  })();
+  const handleSave = () => {
+    if (modal.type === 'phase' && phaseDiff !== 0 && phaseLinkedCount > 0 && shiftLinked) {
+      onShiftDates(modal.item, phaseDiff);
+    }
+    onSave(draft);
+  };
 
   function renderForm() {
     switch (modal.type) {
@@ -499,6 +521,16 @@ function EditModal({ modal, onClose, onSave, onDelete, phases }) {
             <FormField label="Start Date" half><input className="form-input" style={inputStyle} type="date" value={draft.start||''} onChange={e=>up('start',e.target.value)} /></FormField>
             <FormField label="End Date" half><input className="form-input" style={inputStyle} type="date" value={draft.end||''} onChange={e=>up('end',e.target.value)} /></FormField>
           </FormRow>
+          {phaseDiff !== 0 && phaseLinkedCount > 0 && (
+            <div style={{ marginTop:-4, marginBottom:16, padding:'10px 12px', background:T.accentBg, borderRadius:6, border:`1px solid ${T.accent}30` }}>
+              <label style={{ display:'flex', alignItems:'flex-start', gap:8, cursor:'pointer' }}>
+                <input type="checkbox" checked={shiftLinked} onChange={e=>setShiftLinked(e.target.checked)} style={{ marginTop:2 }} />
+                <span style={{ fontFamily:T.sans, fontSize:10, color:T.text2, lineHeight:1.5 }}>
+                  End date moved by {phaseDiff > 0 ? '+' : ''}{phaseDiff} day{Math.abs(phaseDiff)===1?'':'s'} — also shift {phaseLinkedCount} linked date{phaseLinkedCount===1?'':'s'} (deliverables, meetings, milestones, and client items due in this phase) by the same amount.
+                </span>
+              </label>
+            </div>
+          )}
           <FormField label="Description">
             <textarea className="form-textarea" style={inputStyle} value={draft.description||''} onChange={e=>up('description',e.target.value)} placeholder="What happens in this phase..." />
           </FormField>
@@ -728,7 +760,7 @@ function EditModal({ modal, onClose, onSave, onDelete, phases }) {
               style={{ background:T.bg, border:`1px solid ${T.border}`, borderRadius:6, padding:'8px 18px', color:T.text2, fontSize:11, fontWeight:600, cursor:'pointer' }}>
               Cancel
             </button>
-            <button onClick={() => onSave(draft)}
+            <button onClick={handleSave}
               style={{ background:T.accent, border:'none', borderRadius:6, padding:'8px 20px', color:'#fff', fontSize:11, fontWeight:700, letterSpacing:'0.06em', cursor:'pointer' }}>
               {modal.isNew ? 'Add' : 'Save'}
             </button>
@@ -1138,6 +1170,15 @@ function App() {
   const openEdit = (type, item) => setEditModal({ type, item: { ...item }, isNew: false });
   const openAdd  = (type, def)  => setEditModal({ type, item: def, isNew: true });
 
+  function shiftPhaseDates(phase, diff) {
+    if (!diff) return;
+    const ps = pd(phase.start), pe = new Date(pd(phase.end).getTime() + 86400000);
+    setDeliverables(list => list.map(d => d.phase === phase.name && d.due ? { ...d, due: addDays(d.due, diff) } : d));
+    setMeetings(list => list.map(m => meetingPhaseId(m) === phase.id ? { ...m, date: addDays(m.date, diff) } : m));
+    setPresentations(list => list.map(p => { const dt = pd(p.date); return (dt >= ps && dt <= pe) ? { ...p, date: addDays(p.date, diff) } : p; }));
+    setDeps(list => list.map(d => { if (!d.due) return d; const dt = pd(d.due); return (dt >= ps && dt <= pe) ? { ...d, due: addDays(d.due, diff) } : d; }));
+  }
+
   const cycleStatus = (d) => {
     const idx  = STATUS_CYCLE.indexOf(d.status);
     const next = STATUS_CYCLE[idx === -1 || idx === STATUS_CYCLE.length - 1 ? 0 : idx + 1];
@@ -1196,7 +1237,7 @@ function App() {
     return (
       <div style={{ minHeight:'100vh', background:'#F7F5F0', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:24 }}>
         <div style={{ display:'inline-flex', flexDirection:'column', alignItems:'center', gap:8 }}>
-          <div style={{ fontFamily:"'Playfair Display', Georgia, serif", fontSize:28, fontWeight:500, color:'#1A1917' }}>Goodricke</div>
+          <img src="goodricke-logo.png" alt="Goodricke" style={{ height:52, width:'auto' }} />
           <div style={{ fontFamily:"'Inter', sans-serif", fontSize:8.5, fontWeight:600, letterSpacing:'0.22em', textTransform:'uppercase', color:'#9E9890' }}>Project Portal</div>
         </div>
         <div style={{ fontFamily:"'Inter', sans-serif", fontSize:9, color:'#9E9890', letterSpacing:'0.06em' }}>Loading latest…</div>
@@ -1897,6 +1938,11 @@ function App() {
         <EditModal
           modal={editModal}
           phases={phases}
+          deliverables={deliverables}
+          meetings={meetings}
+          presentations={presentations}
+          deps={deps}
+          onShiftDates={shiftPhaseDates}
           onClose={() => setEditModal(null)}
           onSave={saveEdit}
           onDelete={deleteEdit}
