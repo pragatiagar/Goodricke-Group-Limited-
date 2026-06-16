@@ -1009,6 +1009,8 @@ function App() {
       return;
     }
     // Backend → fetch latest snapshot
+    const loadStart = Date.now();
+    const MIN_LOADER_MS = 2000;
     (async () => {
       try {
         const res = await fetch(
@@ -1029,7 +1031,8 @@ function App() {
       } catch (err) {
         console.warn('Goodricke portal: JSONbin load failed; falling back to defaults', err);
       }
-      setLoading(false);
+      const elapsed = Date.now() - loadStart;
+      setTimeout(() => setLoading(false), Math.max(0, MIN_LOADER_MS - elapsed));
       canSave.current = true;
     })();
   }, []);
@@ -1237,7 +1240,7 @@ function App() {
     return (
       <div style={{ minHeight:'100vh', background:'#F7F5F0', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:24 }}>
         <div style={{ display:'inline-flex', flexDirection:'column', alignItems:'center', gap:8 }}>
-          <img src="goodricke-logo.png" alt="Goodricke" style={{ height:52, width:'auto' }} />
+          <img src="Goodricke%20logo.png" alt="Goodricke" style={{ height:160, width:'auto' }} />
           <div style={{ fontFamily:"'Inter', sans-serif", fontSize:8.5, fontWeight:600, letterSpacing:'0.22em', textTransform:'uppercase', color:'#9E9890' }}>Project Portal</div>
         </div>
         <div style={{ fontFamily:"'Inter', sans-serif", fontSize:9, color:'#9E9890', letterSpacing:'0.06em' }}>Loading latest…</div>
