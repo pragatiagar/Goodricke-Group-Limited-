@@ -100,7 +100,7 @@ const MEETING_STATUS_OPTIONS = ['Pending','Scheduled','Done'];
 const MEETING_TYPE_OPTIONS = ['Kick-off','Presentation','Review','Check-in','Handover'];
 const ACTIVITY_TYPE_OPTIONS = ['milestone','feedback','received','kickoff','update'];
 const ATTENDEE_OPTIONS = {
-  'Goodricke Group': [],
+  'Goodricke Group': ['Shevam Sood','Nehasrita Dey'],
   'The Space At 9/2': ['Pragati Todi','Anahita Kayan'],
 };
 
@@ -217,7 +217,7 @@ function getUrgency(due) {
    INITIAL DATA
 ═══════════════════════════════════════ */
 const INITIAL_PROJECT = {
-  name: 'Goodricke',
+  name: 'Goodricke Group Limited',
   category: 'Brand Strategy & Visual Identity',
   color: '#5E7C4A',
   startDate: '2026-07-01',
@@ -582,6 +582,15 @@ function EditModal({ modal, onClose, onSave, onDelete, phases, deliverables, mee
               </select>
             </FormField>
           </FormRow>
+          <FormField label="Format">
+            <label style={{ display:'flex', alignItems:'center', gap:8, cursor:'pointer' }}>
+              <input type="checkbox" checked={!!draft.inPerson} onChange={e=>up('inPerson', e.target.checked)} />
+              <span style={{ fontFamily:T.sans, fontSize:11, color:T.text1 }}>Some attendees are joining in person (hybrid)</span>
+            </label>
+          </FormField>
+          {draft.inPerson && (
+            <FormField label="Location / Venue"><input className="form-input" style={inputStyle} value={draft.location||''} onChange={e=>up('location',e.target.value)} placeholder="e.g. Goodricke House, Kolkata" /></FormField>
+          )}
           <FormField label="Meeting Link (Google Meet or Zoom)"><input className="form-input" style={inputStyle} value={draft.gmeetLink||''} onChange={e=>up('gmeetLink',e.target.value)} placeholder="https://..." /></FormField>
           <FormField label="Meeting Notes">
             <textarea className="form-input" style={{ ...inputStyle, minHeight:90, resize:'vertical', lineHeight:1.6 }}
@@ -816,6 +825,14 @@ function MeetingViewModal({ meeting, onClose }) {
           </div>
         </div>
 
+        {(!isPast && meeting.inPerson) && (
+          <div style={{ marginBottom:12 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:10, padding:'11px 15px', background:'#FAF0E6', borderRadius:7, border:'1px solid #EAD2B0' }}>
+              <span style={{ fontSize:15 }}>📍</span>
+              <span style={{ fontFamily:T.sans, fontSize:11, fontWeight:600, color:'#8A5A2A' }}>{meeting.location || 'In-person meeting'}</span>
+            </div>
+          </div>
+        )}
         {(!isPast && meeting.gmeetLink) && (() => {
           const isZoom = meeting.gmeetLink.includes('zoom.us');
           return (
@@ -1081,6 +1098,25 @@ function App() {
        5  Submitted — Handover remaining
        6  Handover Complete  (all phase deliverables done)
   ─────────────────────────────────────────────────────────────────────── */
+  /* ── DERIVED MILESTONES ─────────────────────────────────────────────
+     Milestones (presentations, e.g. "ms1") and meetings (e.g. "m1") are
+     tracked as separate records but represent the same real-world event,
+     linked here by matching numeric ID suffix (ms1 ↔ m1, ms2 ↔ m2, ...).
+     Matching by ID rather than date means a rescheduled meeting still
+     resolves correctly — the milestone's date AND status follow the
+     meeting automatically, so the "Next" banner never shows a stale date.
+  ─────────────────────────────────────────────────────────────────────── */
+  const effectivePresentations = useMemo(() => {
+    return presentations.map(p => {
+      const n = p.id.match(/^ms(\d+)$/)?.[1];
+      const linked = n ? meetings.find(m => m.id === 'm' + n) : null;
+      if (!linked) return p;
+      const status = linked.status === 'Done' ? 'Done' : linked.status === 'Scheduled' ? 'Scheduled' : 'Pending';
+      const date = linked.date || p.date;
+      return (status !== p.status || date !== p.date) ? { ...p, status, date } : p;
+    });
+  }, [presentations, meetings]);
+
   const effectivePhases = useMemo(() => {
     const lvl = s => ({
       'Yet to begin':0, 'On hold':0,
@@ -1126,7 +1162,7 @@ function App() {
       }
 
       // ── 3. Milestone presentations — always use original date range ─
-      const phasePres = presentations.filter(e => { const d = pd(e.date); return d >= origPs && d <= origPe; });
+      const phasePres = effectivePresentations.filter(e => { const d = pd(e.date); return d >= origPs && d <= origPe; });
       if (phasePres.some(e => e.status === 'Done')      && lvl('In Progress')           > lvl(best)) best = 'In Progress';
       if (phasePres.some(e => e.status === 'Scheduled') && lvl('Presentation scheduled') > lvl(best)) best = 'Presentation scheduled';
 
@@ -1135,13 +1171,13 @@ function App() {
         ? { ...phase, status: best, ...(displayStart ? { displayStart } : {}) }
         : phase;
     });
-  }, [phases, deliverables, meetings, presentations]);
+  }, [phases, deliverables, meetings, effectivePresentations]);
 
-  const progress        = computeProgress(effectivePhases, presentations);
+  const progress        = computeProgress(effectivePhases, effectivePresentations);
   const currentPhase    = getCurrentPhase(effectivePhases);
   const clientSt        = currentPhase ? (INTERNAL_TO_CLIENT[currentPhase.status] || 'In Progress') : 'In Progress';
   const clientPhaseName = currentPhase ? (currentPhase.clientName || currentPhase.name) : '';
-  const nextMilestone   = getNextMilestone(presentations);
+  const nextMilestone   = getNextMilestone(effectivePresentations);
   const pendingDeps     = deps.filter(d => d.status !== 'Completed').length;
   const upcomingMeetings = meetings.filter(m => m.status !== 'Done').sort((a,b) => pd(a.date)-pd(b.date));
   const pastMeetings     = meetings.filter(m => m.status === 'Done').sort((a,b) => pd(b.date)-pd(a.date));
@@ -1377,13 +1413,13 @@ function App() {
           </div>
 
           {/* Horizontal phase row */}
-          <div style={{ display:'flex', alignItems:'flex-start', overflowX:'auto', paddingBottom:8 }}>
+          <div style={{ display:'flex', alignItems:'flex-start', overflowX:'auto', paddingTop:8, paddingBottom:8 }}>
             {effectivePhases.map((phase, i, arr) => {
               const isComp   = COMPLETE_STATUSES.has(phase.status);
               const isActive = ACTIVE_STATUSES.has(phase.status);
               const isLast   = i === arr.length - 1;
               const isExpanded = activePhase === phase.id;
-              const nodeOpacity = (!isComp && !isActive) ? 0.45 : 1;
+              const nodeOpacity = (!isComp && !isActive && !isExpanded) ? 0.45 : 1;
               const lineColor = isComp ? T.complete : T.borderHair;
               const color = phase.color || '#ABA49C';
               const light = phase.light || T.bgAlt;
@@ -1398,7 +1434,7 @@ function App() {
                       background: isComp ? T.complete : isActive ? 'transparent' : T.bgAlt,
                       border: isComp ? `2px solid ${T.complete}` : isActive ? `2px solid ${T.accent}` : `2px solid ${T.borderHair}`,
                       transition:'all 0.2s',
-                      boxShadow: isExpanded ? `0 0 0 3px ${T.accent}30` : 'none',
+                      boxShadow: isExpanded ? `0 0 0 3px ${T.text1}30` : 'none',
                     }}>
                       {isComp
                         ? <span style={{ color:'#fff', fontSize:12, fontWeight:700 }}>✓</span>
@@ -1406,10 +1442,13 @@ function App() {
                       }
                     </div>
                     <div style={{ textAlign:'center', maxWidth:72 }}>
-                      <div style={{ fontFamily:T.sans, fontSize:8, fontWeight:600, color:isActive?T.text1:T.text2, letterSpacing:'0.02em', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', maxWidth:72 }}>
+                      <div style={{ fontFamily:T.sans, fontSize:8, fontWeight:isExpanded?700:isActive?600:600, color:isExpanded?T.text1:isActive?T.text1:T.text2, letterSpacing:'0.02em', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', maxWidth:72 }}>
                         {PHASE_SHORT[phase.clientName||phase.name] || (phase.clientName||phase.name)}
                       </div>
                       <div style={{ fontFamily:T.sans, fontSize:7, color:T.text3, marginTop:2, whiteSpace:'nowrap' }}>{fmtShort(phase.displayStart || phase.start)}</div>
+                      {isExpanded && (
+                        <div style={{ width:0, height:0, borderLeft:'4px solid transparent', borderRight:'4px solid transparent', borderTop:`5px solid ${T.text1}`, margin:'5px auto 0' }} />
+                      )}
                     </div>
                   </div>
                   {/* Connector line */}
@@ -1619,6 +1658,11 @@ function App() {
                     {m.paymentDue && (
                       <span style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'3px 8px', borderRadius:3, fontSize:7, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', color:'#7B4F1A', background:'#FDF0DC', border:'1px solid #C9A96E60', whiteSpace:'nowrap', fontFamily:T.sans }}>
                         💳 Payment Due
+                      </span>
+                    )}
+                    {m.inPerson && (
+                      <span style={{ padding:'4px 10px', background:'#FAF0E6', color:'#8A5A2A', borderRadius:3, fontSize:8, fontWeight:700, fontFamily:T.sans, letterSpacing:'0.06em', border:'1px solid #EAD2B0', whiteSpace:'nowrap' }}>
+                        📍 In-Person
                       </span>
                     )}
                     {m.gmeetLink && (
@@ -1943,7 +1987,7 @@ function App() {
           phases={phases}
           deliverables={deliverables}
           meetings={meetings}
-          presentations={presentations}
+          presentations={effectivePresentations}
           deps={deps}
           onShiftDates={shiftPhaseDates}
           onClose={() => setEditModal(null)}
