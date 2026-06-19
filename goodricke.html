@@ -872,10 +872,13 @@ function MeetingViewModal({ meeting, onClose }) {
         )}
 
         {isPast && (meeting.attendees||[]).length > 0 && (() => {
+          const allKnown = Object.values(ATTENDEE_OPTIONS).flat();
           const byTeam = Object.entries(ATTENDEE_OPTIONS).map(([group, names]) => ({
             group,
             members: (meeting.attendees||[]).filter(a => names.includes(a)),
           })).filter(g => g.members.length > 0);
+          const others = (meeting.attendees||[]).filter(a => !allKnown.includes(a));
+          if (others.length) byTeam.push({ group: 'Other', members: others });
           return (
             <div style={{ marginBottom:22 }}>
               <div style={{ fontFamily:T.sans, fontSize:8, fontWeight:700, letterSpacing:'0.18em', textTransform:'uppercase', color:T.text3, marginBottom:12 }}>Attendees</div>
