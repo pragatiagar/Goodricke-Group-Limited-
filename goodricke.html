@@ -614,7 +614,7 @@ function EditModal({ modal, onClose, onSave, onDelete, phases, deliverables, mee
                     onChange={e => {
                       const file = e.target.files?.[0];
                       if (!file) return;
-                      if (file.size > 400000) { alert('PDF is too large (max ~400KB). Please compress it first.'); e.target.value=''; return; }
+                      if (file.size > 5000000) { alert('PDF is too large (max 5MB). Please compress it first.'); e.target.value=''; return; }
                       const reader = new FileReader();
                       reader.onload = ev => { up('pdfData', ev.target.result); up('pdfName', file.name); };
                       reader.readAsDataURL(file);
