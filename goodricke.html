@@ -473,7 +473,7 @@ function EditableText({ value, onChange, style, placeholder, editMode, multiline
 /* ═══════════════════════════════════════
    EDIT MODAL (all types)
 ═══════════════════════════════════════ */
-function EditModal({ modal, onClose, onSave, onDelete, phases, deliverables, meetings, presentations, deps, onShiftDates }) {
+function EditModal({ modal, onClose, onSave, onDelete, phases, deliverables, meetings, presentations, deps, onShiftDates, team }) {
   const T = useContext(ThemeCtx);
   const [draft, setDraft] = useState({ ...modal.item });
   const [shiftLinked, setShiftLinked] = useState(true);
@@ -632,13 +632,20 @@ function EditModal({ modal, onClose, onSave, onDelete, phases, deliverables, mee
                   up('attendees', [...(draft.attendees||[]), name]);
               }}>
               <option value="">Add attendee…</option>
-              {Object.entries(ATTENDEE_OPTIONS).map(([group, names]) => (
-                <optgroup key={group} label={group}>
+              {(() => {
+                const spaceNames = (team||[]).map(t => t.name);
+                const groups = [
+                  { label: 'The Space At 9/2', names: spaceNames.length ? spaceNames : ATTENDEE_OPTIONS['The Space At 9/2'] || [] },
+                  { label: 'Goodricke Group',  names: ATTENDEE_OPTIONS['Goodricke Group'] || [] },
+                ];
+                return groups.map(({ label, names }) => (
+                <optgroup key={label} label={label}>
                   {names.filter(n => !(draft.attendees||[]).includes(n)).map(n => (
                     <option key={n} value={n}>{n}</option>
                   ))}
                 </optgroup>
-              ))}
+              ));
+              })()}
             </select>
             {(draft.attendees||[]).length > 0 && (
               <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginTop:8 }}>
@@ -1179,8 +1186,9 @@ function App() {
   const clientPhaseName = currentPhase ? (currentPhase.clientName || currentPhase.name) : '';
   const nextMilestone   = getNextMilestone(effectivePresentations);
   const pendingDeps     = deps.filter(d => d.status !== 'Completed').length;
-  const upcomingMeetings = meetings.filter(m => m.status !== 'Done').sort((a,b) => pd(a.date)-pd(b.date));
-  const pastMeetings     = meetings.filter(m => m.status === 'Done').sort((a,b) => pd(b.date)-pd(a.date));
+  const today0 = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
+  const upcomingMeetings = meetings.filter(m => m.status !== 'Done' && pd(m.date) >= today0).sort((a,b) => pd(a.date)-pd(b.date));
+  const pastMeetings     = meetings.filter(m => m.status === 'Done'  || pd(m.date) < today0).sort((a,b) => pd(b.date)-pd(a.date));
 
   /* ── SAVE / DELETE HANDLERS ── */
   function saveEdit(draft) {
@@ -2000,6 +2008,7 @@ function App() {
           presentations={effectivePresentations}
           deps={deps}
           onShiftDates={shiftPhaseDates}
+          team={team}
           onClose={() => setEditModal(null)}
           onSave={saveEdit}
           onDelete={deleteEdit}
