@@ -811,7 +811,8 @@ function parseMeetingForView(m) {
 function MeetingViewModal({ meeting, onClose }) {
   const T = useContext(ThemeCtx);
   if (!meeting) return null;
-  const isPast = meeting.status === 'Done';
+  const todayV = new Date(); todayV.setHours(0,0,0,0);
+  const isPast = meeting.status === 'Done' || pd(meeting.date) < todayV;
   const { decisions, teamItems, clientItems } = parseMeetingForView(meeting);
 
   return (
@@ -832,7 +833,7 @@ function MeetingViewModal({ meeting, onClose }) {
           </div>
         </div>
 
-        {(!isPast && meeting.inPerson) && (
+        {(meeting.inPerson) && (
           <div style={{ marginBottom:12 }}>
             <div style={{ display:'flex', alignItems:'center', gap:10, padding:'11px 15px', background:'#FAF0E6', borderRadius:7, border:'1px solid #EAD2B0' }}>
               <span style={{ fontSize:15 }}>📍</span>
@@ -840,7 +841,7 @@ function MeetingViewModal({ meeting, onClose }) {
             </div>
           </div>
         )}
-        {(!isPast && meeting.gmeetLink) && (() => {
+        {(meeting.gmeetLink) && (() => {
           const isZoom = meeting.gmeetLink.includes('zoom.us');
           return (
             <div style={{ marginBottom:18 }}>
