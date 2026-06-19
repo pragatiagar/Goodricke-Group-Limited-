@@ -1189,7 +1189,17 @@ function App() {
     const withId = isNew ? { ...draft, id: type + uid() } : draft;
     if (type === 'phase')       { isNew ? setPhases(p=>[...p,withId])       : setPhases(p=>p.map(x=>x.id===draft.id?draft:x)); }
     else if (type === 'team')   { isNew ? setTeam(p=>[...p,withId])         : setTeam(p=>p.map(x=>x.id===draft.id?draft:x)); }
-    else if (type === 'meeting'){ isNew ? setMeetings(p=>[...p,withId])     : setMeetings(p=>p.map(x=>x.id===draft.id?draft:x)); }
+    else if (type === 'meeting'){
+      isNew ? setMeetings(p=>[...p,withId]) : setMeetings(p=>p.map(x=>x.id===draft.id?draft:x));
+      // Sync linked milestone (m1↔ms1, m2↔ms2, ...) — write date+status back to presentations state
+      if (!isNew) {
+        const n = draft.id.match(/^m(\d+)$/)?.[1];
+        if (n) {
+          const msStatus = draft.status === 'Done' ? 'Done' : draft.status === 'Scheduled' ? 'Scheduled' : 'Pending';
+          setPresentations(p => p.map(x => x.id === 'ms'+n ? { ...x, date: draft.date || x.date, status: msStatus } : x));
+        }
+      }
+    }
     else if (type === 'deliverable'){ isNew ? setDeliverables(p=>[...p,withId]) : setDeliverables(p=>p.map(x=>x.id===draft.id?draft:x)); }
     else if (type === 'dep')    { isNew ? setDeps(p=>[...p,withId])         : setDeps(p=>p.map(x=>x.id===draft.id?draft:x)); }
     else if (type === 'link')   { setLinks(p=>p.map(folder=>({ ...folder, subFolders: folder.subFolders.map(sf=>sf.id===draft.id?{...draft}:sf) }))); }
