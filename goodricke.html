@@ -808,7 +808,7 @@ function parseMeetingForView(m) {
   return { decisions, teamItems, clientItems };
 }
 
-function MeetingViewModal({ meeting, onClose }) {
+function MeetingViewModal({ meeting, onClose, team }) {
   const T = useContext(ThemeCtx);
   if (!meeting) return null;
   const todayV = new Date(); todayV.setHours(0,0,0,0);
@@ -872,8 +872,15 @@ function MeetingViewModal({ meeting, onClose }) {
         )}
 
         {isPast && (meeting.attendees||[]).length > 0 && (() => {
-          const allKnown = Object.values(ATTENDEE_OPTIONS).flat();
-          const byTeam = Object.entries(ATTENDEE_OPTIONS).map(([group, names]) => ({
+          const spaceNames = (team||[]).map(t => t.name).length
+            ? (team||[]).map(t => t.name)
+            : (ATTENDEE_OPTIONS['The Space At 9/2'] || []);
+          const groups = [
+            { group: 'The Space At 9/2', names: spaceNames },
+            { group: 'Goodricke Group',  names: ATTENDEE_OPTIONS['Goodricke Group'] || [] },
+          ];
+          const allKnown = groups.flatMap(g => g.names);
+          const byTeam = groups.map(({ group, names }) => ({
             group,
             members: (meeting.attendees||[]).filter(a => names.includes(a)),
           })).filter(g => g.members.length > 0);
@@ -2003,7 +2010,7 @@ function App() {
           </div>
         </div>
       )}
-      {activeMeeting && <MeetingViewModal meeting={activeMeeting} onClose={() => setActiveMeeting(null)} />}
+      {activeMeeting && <MeetingViewModal meeting={activeMeeting} onClose={() => setActiveMeeting(null)} team={team} />}
       {editModal && (
         <EditModal
           modal={editModal}
