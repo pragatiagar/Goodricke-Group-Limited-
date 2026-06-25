@@ -388,8 +388,9 @@ function getCurrentPhase(phases) {
 }
 
 function getNextMilestone(presentations) {
+  const today = new Date(); today.setHours(0,0,0,0);
   return [...presentations]
-    .filter(e => e.status === 'Scheduled' || e.status === 'Pending')
+    .filter(e => (e.status === 'Scheduled' || e.status === 'Pending') && pd(e.date) >= today)
     .sort((a,b) => pd(a.date)-pd(b.date))[0] || null;
 }
 
