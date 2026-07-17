@@ -341,6 +341,10 @@ const INITIAL_DEPS = [
   { id:'dep7', title:'Payment — VI Presentation 2 Commencement (25%)', description:'Final instalment, due upon commencement of VI Presentation 2, as per the project agreement.', status:'Pending', due:'2026-09-23', priority:'High' },
 ];
 
+const BAND_COLORS = ['#3D6B50','#4A4540','#7B6FAB','#5B7A99','#C9A040','#B24B43','#4E8A88','#8A6A3A'];
+
+const INITIAL_CAL_BANDS = [];
+
 const INITIAL_LINKS = [
   {
     id:'lnk_team', label:'By — Goodricke Group',
@@ -481,7 +485,7 @@ function EditModal({ modal, onClose, onSave, onDelete, phases, deliverables, mee
   const up = (k, v) => setDraft(p => ({ ...p, [k]: v }));
 
   const inputStyle = { background:T.surface, border:`1px solid ${T.border}`, color:T.text1 };
-  const typeLabels = { phase:'Phase', team:'Team Member', meeting:'Meeting', deliverable:'Deliverable', dep:'Input Required', activity:'Update', link:'Link' };
+  const typeLabels = { phase:'Phase', team:'Team Member', meeting:'Meeting', deliverable:'Deliverable', dep:'Input Required', activity:'Update', link:'Link', calband:'Calendar Band' };
   const label = typeLabels[modal.type] || modal.type;
 
   /* ── Linked-date shift (phase end date changed) ── */
@@ -748,6 +752,30 @@ function EditModal({ modal, onClose, onSave, onDelete, phases, deliverables, mee
         </>
       );
 
+      case 'calband': return (
+        <>
+          <FormField label="Label">
+            <input className="form-input" style={inputStyle} value={draft.label||''} onChange={e=>up('label',e.target.value)} placeholder="e.g. Research, Brand Strategy..." />
+          </FormField>
+          <FormRow>
+            <FormField label="Start Date" half>
+              <input type="date" className="form-input" style={inputStyle} value={draft.start||''} onChange={e=>up('start',e.target.value)} />
+            </FormField>
+            <FormField label="End Date" half>
+              <input type="date" className="form-input" style={inputStyle} value={draft.end||''} onChange={e=>up('end',e.target.value)} />
+            </FormField>
+          </FormRow>
+          <FormField label="Colour">
+            <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:8 }}>
+              {BAND_COLORS.map(c => (
+                <button key={c} onClick={()=>up('color',c)} style={{ width:26, height:26, borderRadius:'50%', background:c, border: draft.color===c ? `3px solid ${T.text1}` : `2px solid transparent`, cursor:'pointer', outline:'none', transition:'border 0.12s' }} />
+              ))}
+            </div>
+            <input className="form-input" style={{ ...inputStyle, fontFamily:'monospace', fontSize:11 }} value={draft.color||''} onChange={e=>up('color',e.target.value)} placeholder="#4A4540" />
+          </FormField>
+        </>
+      );
+
       default: return null;
     }
   }
@@ -981,6 +1009,8 @@ function App() {
   const [deliverables,  setDeliverables]  = useState(INITIAL_DELIVERABLES);
   const [deps,          setDeps]          = useState(INITIAL_DEPS);
   const [links,         setLinks]         = useState(INITIAL_LINKS);
+  const [calBands,      setCalBands]      = useState(INITIAL_CAL_BANDS);
+  const [calMonth,      setCalMonth]      = useState(() => { const d = new Date(); d.setDate(1); d.setHours(0,0,0,0); return d; });
 
   const [editMode,      setEditMode]      = useState(false);
   const [editModal,     setEditModal]     = useState(null);
@@ -1039,6 +1069,7 @@ function App() {
           r('goodricke_deliverables',  setDeliverables,  migrateDeliverables);
           r('goodricke_deps',          setDeps,  migrateDeps);
           r('goodricke_links',         setLinks);
+          r('goodricke_cal_bands',     setCalBands);
         }
       } catch {}
       canSave.current = true;
@@ -1063,6 +1094,7 @@ function App() {
           if (record.deliverables?.length)  setDeliverables(migrateDeliverables(record.deliverables));
           if (record.deps?.length)          setDeps(migrateDeps(record.deps));
           if (record.links?.length)         setLinks(record.links);
+          if (record.calBands?.length)      setCalBands(record.calBands);
         }
       } catch (err) {
         console.warn('Goodricke portal: JSONbin load failed; falling back to defaults', err);
@@ -1086,6 +1118,7 @@ function App() {
       localStorage.setItem('goodricke_deliverables',  JSON.stringify(deliverables));
       localStorage.setItem('goodricke_deps',          JSON.stringify(deps));
       localStorage.setItem('goodricke_links',         JSON.stringify(links));
+      localStorage.setItem('goodricke_cal_bands',     JSON.stringify(calBands));
     } catch {}
     if (!JSONBIN_OK) return;
     // Debounced PUT to avoid spamming JSONbin during rapid edits
@@ -1096,12 +1129,12 @@ function App() {
         body:    JSON.stringify({
           version: DATA_VERSION,
           project, phases, team, presentations,
-          meetings, deliverables, deps, links,
+          meetings, deliverables, deps, links, calBands,
         }),
       }).catch(err => console.warn('Goodricke portal: JSONbin save failed', err));
     }, 600);
     return () => clearTimeout(tid);
-  }, [project, phases, team, presentations, meetings, deliverables, deps, links]);
+  }, [project, phases, team, presentations, meetings, deliverables, deps, links, calBands]);
 
   /* ── DERIVED PHASE STATUS + DISPLAY DATE ───────────────────────────────
      Three signals combined; highest level wins (phases never downgraded).
@@ -1223,6 +1256,7 @@ function App() {
     else if (type === 'deliverable'){ isNew ? setDeliverables(p=>[...p,withId]) : setDeliverables(p=>p.map(x=>x.id===draft.id?draft:x)); }
     else if (type === 'dep')    { isNew ? setDeps(p=>[...p,withId])         : setDeps(p=>p.map(x=>x.id===draft.id?draft:x)); }
     else if (type === 'link')   { setLinks(p=>p.map(folder=>({ ...folder, subFolders: folder.subFolders.map(sf=>sf.id===draft.id?{...draft}:sf) }))); }
+    else if (type === 'calband'){ isNew ? setCalBands(p=>[...p,withId]) : setCalBands(p=>p.map(x=>x.id===draft.id?draft:x)); }
     setEditModal(null);
   }
 
@@ -1233,6 +1267,7 @@ function App() {
     else if (type === 'meeting')setMeetings(p=>p.filter(x=>x.id!==draft.id));
     else if (type === 'deliverable') setDeliverables(p=>p.filter(x=>x.id!==draft.id));
     else if (type === 'dep')    setDeps(p=>p.filter(x=>x.id!==draft.id));
+    else if (type === 'calband')setCalBands(p=>p.filter(x=>x.id!==draft.id));
     setEditModal(null);
   }
 
@@ -1321,6 +1356,7 @@ function App() {
     { id:'meetings', label:'Meetings' },
     { id:'deliverables', label:'Deliverables' },
     { id:'inputs', label:'Client Deliverables' },
+    { id:'calendar', label:'Calendar' },
     { id:'files', label:'Files' },
   ];
 
@@ -1934,6 +1970,176 @@ function App() {
               </div>
             );
           })}
+        </section>
+
+        {/* ════════════════════════════════
+            CALENDAR (id="calendar")
+        ════════════════════════════════ */}
+        <section id="calendar" style={{ paddingTop:48, paddingBottom:48, borderBottom:`1px solid ${T.borderHair}` }}>
+          {(() => {
+            const today      = new Date(); today.setHours(0,0,0,0);
+            const year       = calMonth.getFullYear();
+            const month      = calMonth.getMonth();
+            const daysInMonth= new Date(year, month+1, 0).getDate();
+            const firstDow   = new Date(year, month, 1).getDay();
+            const cells      = [...Array(firstDow).fill(null), ...Array.from({length:daysInMonth},(_,i)=>i+1)];
+            while (cells.length % 7 !== 0) cells.push(null);
+            const weeks = [];
+            for (let i=0; i<cells.length; i+=7) weeks.push(cells.slice(i,i+7));
+            const fmt2   = n => String(n).padStart(2,'0');
+            const toDate = d => d ? `${year}-${fmt2(month+1)}-${fmt2(d)}` : null;
+            const prevMonth = new Date(year, month-1, 1);
+            const nextMonth = new Date(year, month+1, 1);
+            const DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+            const mtgByDay = {};
+            meetings.forEach(m => { if (m.date) (mtgByDay[m.date] = mtgByDay[m.date]||[]).push(m); });
+            const presByDay = {};
+            effectivePresentations.forEach(p => { if (p.date) (presByDay[p.date] = presByDay[p.date]||[]).push(p); });
+            return (
+              <div>
+                {/* Nav row */}
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:24 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:14 }}>
+                    <button onClick={() => setCalMonth(prevMonth)}
+                      style={{ background:'none', border:`1px solid ${T.border}`, borderRadius:6, width:30, height:30, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', color:T.text1, fontSize:15 }}>‹</button>
+                    <span style={{ fontFamily:T.serif, fontSize:24, fontWeight:500, color:T.text1, minWidth:200 }}>
+                      {calMonth.toLocaleString('en',{month:'long', year:'numeric'})}
+                    </span>
+                    <button onClick={() => setCalMonth(nextMonth)}
+                      style={{ background:'none', border:`1px solid ${T.border}`, borderRadius:6, width:30, height:30, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', color:T.text1, fontSize:15 }}>›</button>
+                  </div>
+                  <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                    <button onClick={() => setCalMonth(new Date(today.getFullYear(), today.getMonth(), 1))}
+                      style={{ background:'none', border:`1px solid ${T.border}`, borderRadius:20, padding:'5px 14px', fontFamily:T.sans, fontSize:8, fontWeight:600, color:T.text2, cursor:'pointer', letterSpacing:'0.06em' }}>
+                      Today
+                    </button>
+                    {editMode && (
+                      <button className="add-btn" onClick={() => openAdd('calband', { label:'', start:'', end:'', color:BAND_COLORS[0] })}
+                        style={{ border:`1px dashed ${T.accent}70`, color:T.accent, padding:'5px 12px' }}>
+                        + Add Band
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Legend */}
+                {calBands.length > 0 && (
+                  <div style={{ display:'flex', flexWrap:'wrap', gap:10, marginBottom:18 }}>
+                    {calBands.map(b => (
+                      <div key={b.id} style={{ display:'flex', alignItems:'center', gap:6 }}>
+                        <div style={{ width:10, height:10, borderRadius:'50%', background:b.color }} />
+                        <span style={{ fontFamily:T.sans, fontSize:9, color:T.text2 }}>{b.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Grid */}
+                <div style={{ border:`1px solid ${T.border}`, borderRadius:6, overflow:'hidden' }}>
+                  {/* DOW header */}
+                  <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', background:T.bgAlt, borderBottom:`1px solid ${T.border}` }}>
+                    {DOW.map(d => (
+                      <div key={d} style={{ padding:'9px 12px', fontFamily:T.sans, fontSize:8, fontWeight:700, letterSpacing:'0.14em', textTransform:'uppercase', color:T.text3 }}>{d}</div>
+                    ))}
+                  </div>
+
+                  {/* Weeks */}
+                  {weeks.map((week, wi) => {
+                    const weekStart = toDate(week.find(d=>d));
+                    const weekEnd   = toDate([...week].reverse().find(d=>d));
+                    const activeBands = calBands.filter(b => b.start && b.end && b.label && weekStart && weekEnd && b.start <= weekEnd && b.end >= weekStart);
+                    return (
+                      <div key={wi} style={{ borderBottom: wi < weeks.length-1 ? `1px solid ${T.border}` : 'none' }}>
+                        {/* Day cells */}
+                        <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)' }}>
+                          {week.map((day, di) => {
+                            const ds      = toDate(day);
+                            const dayMtgs = ds ? (mtgByDay[ds]||[]) : [];
+                            const dayPres = ds ? (presByDay[ds]||[]) : [];
+                            const isToday = day && today.getFullYear()===year && today.getMonth()===month && today.getDate()===day;
+                            return (
+                              <div key={di} style={{
+                                minHeight:90, padding:'8px 10px',
+                                borderRight: di < 6 ? `1px solid ${T.border}` : 'none',
+                                background: isToday ? T.accentBg : !day ? T.bgAlt : T.surface,
+                                opacity: !day ? 0.5 : 1,
+                              }}>
+                                {day && (
+                                  <>
+                                    <div style={isToday ? {
+                                      width:22, height:22, borderRadius:'50%', background:T.accent,
+                                      display:'flex', alignItems:'center', justifyContent:'center',
+                                      fontFamily:T.sans, fontSize:10, fontWeight:700, color:'#fff', marginBottom:6,
+                                    } : {
+                                      fontFamily:T.sans, fontSize:11, fontWeight:500, color:T.text3, marginBottom:4,
+                                    }}>{day}</div>
+                                    {dayPres.map(p => (
+                                      <div key={p.id} style={{
+                                        background: p.status==='Done' ? T.bgAlt : T.accentBg,
+                                        color: p.status==='Done' ? T.text3 : T.accent,
+                                        border: `1px solid ${T.accent}44`,
+                                        borderRadius:3, padding:'3px 6px', marginBottom:3,
+                                        fontFamily:T.sans, fontSize:8, fontWeight:700, lineHeight:1.3, letterSpacing:'0.04em',
+                                      }}>★ {p.title}</div>
+                                    ))}
+                                    {dayMtgs.map(m => (
+                                      <div key={m.id} onClick={() => setActiveMeeting(m)} style={{
+                                        background: m.status==='Done' ? T.bgAlt : T.accent,
+                                        color:      m.status==='Done' ? T.text3 : '#fff',
+                                        opacity:    m.status==='Done' ? 0.55 : 1,
+                                        border:     m.status==='Done' ? `1px solid ${T.border}` : 'none',
+                                        borderRadius:3, padding:'3px 6px', marginBottom:3,
+                                        fontFamily:T.sans, fontSize:8, fontWeight:600, lineHeight:1.3, cursor:'pointer',
+                                      }}>{m.title}</div>
+                                    ))}
+                                  </>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Band rows */}
+                        {activeBands.map(b => {
+                          let startCol = 7, endCol = -1;
+                          week.forEach((day, di) => {
+                            const ds = toDate(day);
+                            if (ds && ds >= b.start && ds <= b.end) { startCol = Math.min(startCol, di); endCol = Math.max(endCol, di); }
+                          });
+                          if (endCol < 0) return null;
+                          const leftPct  = (startCol / 7 * 100).toFixed(2);
+                          const widthPct = ((endCol - startCol + 1) / 7 * 100).toFixed(2);
+                          const isFirstWeek = b.start >= weekStart;
+                          const isLastWeek  = b.end   <= weekEnd;
+                          return (
+                            <div key={b.id}
+                              onClick={() => editMode && openEdit('calband', b)}
+                              style={{ position:'relative', height:30, borderTop:`1px solid ${T.borderHair}`, cursor: editMode ? 'pointer' : 'default' }}>
+                              <div style={{
+                                position:'absolute', top:4, bottom:4,
+                                left:`calc(${leftPct}% + 6px)`,
+                                width:`calc(${widthPct}% - 12px)`,
+                                background: b.color + '22',
+                                border:`1.5px solid ${b.color}66`,
+                                borderRadius:`${isFirstWeek?5:0}px ${isLastWeek?5:0}px ${isLastWeek?5:0}px ${isFirstWeek?5:0}px`,
+                                display:'flex', alignItems:'center', gap:7, paddingLeft:10, paddingRight:8,
+                              }}>
+                                <div style={{ width:7, height:7, borderRadius:'50%', background:b.color, flexShrink:0 }} />
+                                <span style={{ fontFamily:T.sans, fontSize:9, fontWeight:600, color:b.color, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', flex:1 }}>
+                                  {isFirstWeek || startCol === 0 ? b.label : ''}
+                                </span>
+                                {editMode && <span style={{ fontFamily:T.sans, fontSize:7, color:b.color, opacity:0.6 }}>✏</span>}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
         </section>
 
         {/* ════════════════════════════════
