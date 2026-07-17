@@ -1351,12 +1351,12 @@ function App() {
 
   const navLinks = [
     { id:'overview', label:'Overview' },
+    { id:'calendar', label:'Calendar' },
+    { id:'meetings', label:'Meetings' },
     { id:'timeline', label:'Timeline' },
     { id:'team', label:'Team' },
-    { id:'meetings', label:'Meetings' },
     { id:'deliverables', label:'Deliverables' },
     { id:'inputs', label:'Client Deliverables' },
-    { id:'calendar', label:'Calendar' },
     { id:'files', label:'Files' },
   ];
 
@@ -1467,6 +1467,294 @@ function App() {
               </div>
             </>}
           </div>
+        </section>
+
+        {/* ════════════════════════════════
+            CALENDAR (id="calendar")
+        ════════════════════════════════ */}
+        <section id="calendar" style={{ paddingTop:48, paddingBottom:48, borderBottom:`1px solid ${T.borderHair}` }}>
+          {(() => {
+            const today      = new Date(); today.setHours(0,0,0,0);
+            const year       = calMonth.getFullYear();
+            const month      = calMonth.getMonth();
+            const daysInMonth= new Date(year, month+1, 0).getDate();
+            const firstDow   = new Date(year, month, 1).getDay();
+            const cells      = [...Array(firstDow).fill(null), ...Array.from({length:daysInMonth},(_,i)=>i+1)];
+            while (cells.length % 7 !== 0) cells.push(null);
+            const weeks = [];
+            for (let i=0; i<cells.length; i+=7) weeks.push(cells.slice(i,i+7));
+            const fmt2   = n => String(n).padStart(2,'0');
+            const toDate = d => d ? `${year}-${fmt2(month+1)}-${fmt2(d)}` : null;
+            const prevMonth = new Date(year, month-1, 1);
+            const nextMonth = new Date(year, month+1, 1);
+            const DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+            const mtgByDay = {};
+            meetings.forEach(m => { if (m.date) (mtgByDay[m.date] = mtgByDay[m.date]||[]).push(m); });
+            const presByDay = {};
+            effectivePresentations.forEach(p => { if (p.date) (presByDay[p.date] = presByDay[p.date]||[]).push(p); });
+            return (
+              <div>
+                {/* Nav row */}
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:24 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:14 }}>
+                    <button onClick={() => setCalMonth(prevMonth)}
+                      style={{ background:'none', border:`1px solid ${T.border}`, borderRadius:6, width:30, height:30, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', color:T.text1, fontSize:15 }}>‹</button>
+                    <span style={{ fontFamily:T.serif, fontSize:24, fontWeight:500, color:T.text1, minWidth:200 }}>
+                      {calMonth.toLocaleString('en',{month:'long', year:'numeric'})}
+                    </span>
+                    <button onClick={() => setCalMonth(nextMonth)}
+                      style={{ background:'none', border:`1px solid ${T.border}`, borderRadius:6, width:30, height:30, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', color:T.text1, fontSize:15 }}>›</button>
+                  </div>
+                  <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                    <button onClick={() => setCalMonth(new Date(today.getFullYear(), today.getMonth(), 1))}
+                      style={{ background:'none', border:`1px solid ${T.border}`, borderRadius:20, padding:'5px 14px', fontFamily:T.sans, fontSize:8, fontWeight:600, color:T.text2, cursor:'pointer', letterSpacing:'0.06em' }}>
+                      Today
+                    </button>
+                    {editMode && (
+                      <button className="add-btn" onClick={() => openAdd('calband', { label:'', start:'', end:'', color:BAND_COLORS[0] })}
+                        style={{ border:`1px dashed ${T.accent}70`, color:T.accent, padding:'5px 12px' }}>
+                        + Add Band
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Legend */}
+                {calBands.length > 0 && (
+                  <div style={{ display:'flex', flexWrap:'wrap', gap:10, marginBottom:18 }}>
+                    {calBands.map(b => (
+                      <div key={b.id} style={{ display:'flex', alignItems:'center', gap:6 }}>
+                        <div style={{ width:10, height:10, borderRadius:'50%', background:b.color }} />
+                        <span style={{ fontFamily:T.sans, fontSize:9, color:T.text2 }}>{b.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Grid */}
+                <div style={{ border:`1px solid ${T.border}`, borderRadius:6, overflow:'hidden' }}>
+                  {/* DOW header */}
+                  <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', background:T.bgAlt, borderBottom:`1px solid ${T.border}` }}>
+                    {DOW.map(d => (
+                      <div key={d} style={{ padding:'9px 12px', fontFamily:T.sans, fontSize:8, fontWeight:700, letterSpacing:'0.14em', textTransform:'uppercase', color:T.text3 }}>{d}</div>
+                    ))}
+                  </div>
+
+                  {/* Weeks */}
+                  {weeks.map((week, wi) => {
+                    const weekStart = toDate(week.find(d=>d));
+                    const weekEnd   = toDate([...week].reverse().find(d=>d));
+                    const activeBands = calBands.filter(b => b.start && b.end && b.label && weekStart && weekEnd && b.start <= weekEnd && b.end >= weekStart);
+                    return (
+                      <div key={wi} style={{ borderBottom: wi < weeks.length-1 ? `1px solid ${T.border}` : 'none' }}>
+                        {/* Day cells */}
+                        <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)' }}>
+                          {week.map((day, di) => {
+                            const ds      = toDate(day);
+                            const dayMtgs = ds ? (mtgByDay[ds]||[]) : [];
+                            const dayPres = ds ? (presByDay[ds]||[]) : [];
+                            const isToday = day && today.getFullYear()===year && today.getMonth()===month && today.getDate()===day;
+                            return (
+                              <div key={di} style={{
+                                minHeight:90, padding:'8px 10px',
+                                borderRight: di < 6 ? `1px solid ${T.border}` : 'none',
+                                background: isToday ? T.accentBg : !day ? T.bgAlt : T.surface,
+                                opacity: !day ? 0.5 : 1,
+                              }}>
+                                {day && (
+                                  <>
+                                    <div style={isToday ? {
+                                      width:22, height:22, borderRadius:'50%', background:T.accent,
+                                      display:'flex', alignItems:'center', justifyContent:'center',
+                                      fontFamily:T.sans, fontSize:10, fontWeight:700, color:'#fff', marginBottom:6,
+                                    } : {
+                                      fontFamily:T.sans, fontSize:11, fontWeight:500, color:T.text3, marginBottom:4,
+                                    }}>{day}</div>
+                                    {dayPres.map(p => (
+                                      <div key={p.id} style={{
+                                        background: p.status==='Done' ? T.bgAlt : T.accentBg,
+                                        color: p.status==='Done' ? T.text3 : T.accent,
+                                        border: `1px solid ${T.accent}44`,
+                                        borderRadius:3, padding:'3px 6px', marginBottom:3,
+                                        fontFamily:T.sans, fontSize:8, fontWeight:700, lineHeight:1.3, letterSpacing:'0.04em',
+                                      }}>★ {p.title}</div>
+                                    ))}
+                                    {dayMtgs.map(m => (
+                                      <div key={m.id} onClick={() => setActiveMeeting(m)} style={{
+                                        background: m.status==='Done' ? T.bgAlt : T.accent,
+                                        color:      m.status==='Done' ? T.text3 : '#fff',
+                                        opacity:    m.status==='Done' ? 0.55 : 1,
+                                        border:     m.status==='Done' ? `1px solid ${T.border}` : 'none',
+                                        borderRadius:3, padding:'3px 6px', marginBottom:3,
+                                        fontFamily:T.sans, fontSize:8, fontWeight:600, lineHeight:1.3, cursor:'pointer',
+                                      }}>{m.title}</div>
+                                    ))}
+                                  </>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Band rows */}
+                        {activeBands.map(b => {
+                          let startCol = 7, endCol = -1;
+                          week.forEach((day, di) => {
+                            const ds = toDate(day);
+                            if (ds && ds >= b.start && ds <= b.end) { startCol = Math.min(startCol, di); endCol = Math.max(endCol, di); }
+                          });
+                          if (endCol < 0) return null;
+                          const leftPct  = (startCol / 7 * 100).toFixed(2);
+                          const widthPct = ((endCol - startCol + 1) / 7 * 100).toFixed(2);
+                          const isFirstWeek = b.start >= weekStart;
+                          const isLastWeek  = b.end   <= weekEnd;
+                          return (
+                            <div key={b.id}
+                              onClick={() => editMode && openEdit('calband', b)}
+                              style={{ position:'relative', height:30, borderTop:`1px solid ${T.borderHair}`, cursor: editMode ? 'pointer' : 'default' }}>
+                              <div style={{
+                                position:'absolute', top:4, bottom:4,
+                                left:`calc(${leftPct}% + 6px)`,
+                                width:`calc(${widthPct}% - 12px)`,
+                                background: b.color + '22',
+                                border:`1.5px solid ${b.color}66`,
+                                borderRadius:`${isFirstWeek?5:0}px ${isLastWeek?5:0}px ${isLastWeek?5:0}px ${isFirstWeek?5:0}px`,
+                                display:'flex', alignItems:'center', gap:7, paddingLeft:10, paddingRight:8,
+                              }}>
+                                <div style={{ width:7, height:7, borderRadius:'50%', background:b.color, flexShrink:0 }} />
+                                <span style={{ fontFamily:T.sans, fontSize:9, fontWeight:600, color:b.color, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', flex:1 }}>
+                                  {isFirstWeek || startCol === 0 ? b.label : ''}
+                                </span>
+                                {editMode && <span style={{ fontFamily:T.sans, fontSize:7, color:b.color, opacity:0.6 }}>✏</span>}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
+        </section>
+
+        {/* ════════════════════════════════
+            MEETINGS (id="meetings")
+        ════════════════════════════════ */}
+        <section id="meetings" style={{ paddingTop:48, paddingBottom:48, borderBottom:`1px solid ${T.borderHair}` }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
+            <div style={{ fontFamily:T.sans, fontSize:8, fontWeight:700, letterSpacing:'0.22em', textTransform:'uppercase', color:T.text3 }}>Meetings &amp; Presentations</div>
+            {editMode && <button className="add-btn" style={{ border:`1px dashed ${T.accent}70`, color:T.accent, padding:'5px 12px', marginTop:0 }} onClick={() => openAdd('meeting', { title:'', date:'', time:'', type:'Presentation', status:'Pending', gmeetLink:'', notesLink:'', pdfData:'', pdfName:'', summary:'', decisions:'', teamItems:'', clientItems:'' })}>+ Add Meeting</button>}
+          </div>
+
+          {/* Tab bar */}
+          <div style={{ display:'flex', gap:20, borderBottom:`1px solid ${T.borderHair}`, marginBottom:24 }}>
+            {[['upcoming','Upcoming'],['past','Past']].map(([key, label]) => (
+              <button key={key}
+                onClick={() => setMeetingTab(key)}
+                style={{
+                  background:'none', border:'none', cursor:'pointer',
+                  fontFamily:T.sans, fontSize:9, fontWeight:600,
+                  color: meetingTab === key ? T.text1 : T.text3,
+                  paddingBottom:10, paddingTop:2,
+                  borderBottom: meetingTab === key ? `1.5px solid ${T.accent}` : '1.5px solid transparent',
+                  transition:'color 0.15s, border-color 0.15s',
+                  letterSpacing:'0.04em',
+                }}>
+                {label} {key === 'upcoming' ? `(${upcomingMeetings.length})` : `(${pastMeetings.length})`}
+              </button>
+            ))}
+          </div>
+
+          {meetingTab === 'upcoming' && (
+            <div>
+              {upcomingMeetings.length === 0 && (
+                <div style={{ fontFamily:T.sans, fontSize:12, color:T.text3, padding:'16px 0' }}>No upcoming meetings scheduled.</div>
+              )}
+              {upcomingMeetings.map((m, i) => (
+                <div key={m.id} className="edit-row accordion-row"
+                  onClick={() => !editMode && setActiveMeeting(m)}
+                  style={{
+                    display:'flex', gap:16, alignItems:'center', padding:'14px 0',
+                    borderBottom: i < upcomingMeetings.length - 1 ? `1px solid ${T.borderHair}` : 'none',
+                    cursor: editMode ? 'default' : 'pointer',
+                  }}
+                  onMouseEnter={e=>{ if(!editMode) e.currentTarget.style.background=T.bgAlt; }}
+                  onMouseLeave={e=>{ e.currentTarget.style.background='transparent'; }}>
+                  {/* Date badge */}
+                  <div style={{ flexShrink:0, width:36, textAlign:'center' }}>
+                    <div style={{ fontFamily:T.serif, fontSize:16, fontWeight:500, color:T.accent, lineHeight:1 }}>{pd(m.date).getDate()}</div>
+                    <div style={{ fontFamily:T.sans, fontSize:7, color:T.text3, textTransform:'uppercase', letterSpacing:'0.1em', marginTop:2 }}>{pd(m.date).toLocaleString('en',{month:'short'})}</div>
+                  </div>
+                  {/* Content */}
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontFamily:T.sans, fontSize:13, fontWeight:600, color:T.text1 }}>{m.title}</div>
+                    <div style={{ fontFamily:T.sans, fontSize:9, color:T.text3, marginTop:2 }}>{m.type}{m.time ? ` · ${m.time}` : ''}</div>
+                  </div>
+                  {/* Right */}
+                  <div style={{ display:'flex', gap:8, alignItems:'center', flexShrink:0 }}>
+                    {m.paymentDue && (
+                      <span style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'3px 8px', borderRadius:3, fontSize:7, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', color:'#7B4F1A', background:'#FDF0DC', border:'1px solid #C9A96E60', whiteSpace:'nowrap', fontFamily:T.sans }}>
+                        💳 Payment Due
+                      </span>
+                    )}
+                    {m.inPerson && (
+                      <span style={{ padding:'4px 10px', background:'#FAF0E6', color:'#8A5A2A', borderRadius:3, fontSize:8, fontWeight:700, fontFamily:T.sans, letterSpacing:'0.06em', border:'1px solid #EAD2B0', whiteSpace:'nowrap' }}>
+                        📍 In-Person
+                      </span>
+                    )}
+                    {m.gmeetLink && (
+                      <a href={m.gmeetLink} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()}
+                        style={{ padding:'4px 10px', background:m.gmeetLink.includes('zoom.us')?'#EBF5FB':'#F0FAF0', color:m.gmeetLink.includes('zoom.us')?'#1A6B9A':'#2E7D32', borderRadius:3, fontSize:8, fontWeight:700, fontFamily:T.sans, letterSpacing:'0.06em', textDecoration:'none', border:`1px solid ${m.gmeetLink.includes('zoom.us')?'#BEE3F8':'#C8E6C9'}`, whiteSpace:'nowrap' }}>
+                        {m.gmeetLink.includes('zoom.us') ? 'Join Zoom' : 'Join Meet'}
+                      </a>
+                    )}
+                    <Pill color={cTextColor(m.status)} bg={cBg(m.status)} size={7}>{m.status}</Pill>
+                    {editMode ? <EditBadge onClick={() => openEdit('meeting', m)} /> : <span style={{ color:T.text3, fontSize:14 }}>›</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {meetingTab === 'past' && (
+            <div>
+              {pastMeetings.length === 0 && (
+                <div style={{ fontFamily:T.sans, fontSize:12, color:T.text3, padding:'16px 0' }}>No past meetings yet.</div>
+              )}
+              {(showAllPast ? pastMeetings : pastMeetings.slice(0, 3)).map((m, i, arr) => (
+                <div key={m.id} className="edit-row accordion-row"
+                  onClick={() => !editMode && setActiveMeeting(m)}
+                  style={{
+                    display:'flex', gap:16, alignItems:'center', padding:'12px 0',
+                    borderBottom: i < arr.length - 1 ? `1px solid ${T.borderHair}` : 'none',
+                    cursor: editMode ? 'default' : 'pointer',
+                    opacity:0.65,
+                  }}
+                  onMouseEnter={e=>{ e.currentTarget.style.opacity='0.9'; if(!editMode) e.currentTarget.style.background=T.bgAlt; }}
+                  onMouseLeave={e=>{ e.currentTarget.style.opacity='0.65'; e.currentTarget.style.background='transparent'; }}>
+                  <div style={{ flexShrink:0, width:36, textAlign:'center' }}>
+                    <div style={{ fontFamily:T.serif, fontSize:15, fontWeight:500, color:T.text3, lineHeight:1 }}>{pd(m.date).getDate()}</div>
+                    <div style={{ fontFamily:T.sans, fontSize:7, color:T.text3, textTransform:'uppercase', letterSpacing:'0.08em', marginTop:2 }}>{pd(m.date).toLocaleString('en',{month:'short'})}</div>
+                  </div>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontFamily:T.sans, fontSize:12, fontWeight:500, color:T.text2 }}>{m.title}</div>
+                    <div style={{ fontFamily:T.sans, fontSize:9, color:T.text3, marginTop:2 }}>{m.type}</div>
+                  </div>
+                  <div style={{ display:'flex', gap:8, alignItems:'center', flexShrink:0 }}>
+                    {editMode ? <EditBadge onClick={() => openEdit('meeting', m)} /> : <span style={{ fontFamily:T.sans, fontSize:9, color:T.text3 }}>View notes ›</span>}
+                  </div>
+                </div>
+              ))}
+              {!showAllPast && pastMeetings.length > 3 && (
+                <button onClick={() => setShowAllPast(true)}
+                  style={{ background:'none', border:'none', cursor:'pointer', fontFamily:T.sans, fontSize:9, color:T.accent, padding:'12px 0', letterSpacing:'0.04em' }}>
+                  Show all ({pastMeetings.length}) →
+                </button>
+              )}
+            </div>
+          )}
         </section>
 
         {/* ════════════════════════════════
@@ -1668,124 +1956,6 @@ function App() {
         </section>
 
         {/* ════════════════════════════════
-            MEETINGS (id="meetings")
-        ════════════════════════════════ */}
-        <section id="meetings" style={{ paddingTop:48, paddingBottom:48, borderBottom:`1px solid ${T.borderHair}` }}>
-          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
-            <div style={{ fontFamily:T.sans, fontSize:8, fontWeight:700, letterSpacing:'0.22em', textTransform:'uppercase', color:T.text3 }}>Meetings &amp; Presentations</div>
-            {editMode && <button className="add-btn" style={{ border:`1px dashed ${T.accent}70`, color:T.accent, padding:'5px 12px', marginTop:0 }} onClick={() => openAdd('meeting', { title:'', date:'', time:'', type:'Presentation', status:'Pending', gmeetLink:'', notesLink:'', pdfData:'', pdfName:'', summary:'', decisions:'', teamItems:'', clientItems:'' })}>+ Add Meeting</button>}
-          </div>
-
-          {/* Tab bar */}
-          <div style={{ display:'flex', gap:20, borderBottom:`1px solid ${T.borderHair}`, marginBottom:24 }}>
-            {[['upcoming','Upcoming'],['past','Past']].map(([key, label]) => (
-              <button key={key}
-                onClick={() => setMeetingTab(key)}
-                style={{
-                  background:'none', border:'none', cursor:'pointer',
-                  fontFamily:T.sans, fontSize:9, fontWeight:600,
-                  color: meetingTab === key ? T.text1 : T.text3,
-                  paddingBottom:10, paddingTop:2,
-                  borderBottom: meetingTab === key ? `1.5px solid ${T.accent}` : '1.5px solid transparent',
-                  transition:'color 0.15s, border-color 0.15s',
-                  letterSpacing:'0.04em',
-                }}>
-                {label} {key === 'upcoming' ? `(${upcomingMeetings.length})` : `(${pastMeetings.length})`}
-              </button>
-            ))}
-          </div>
-
-          {meetingTab === 'upcoming' && (
-            <div>
-              {upcomingMeetings.length === 0 && (
-                <div style={{ fontFamily:T.sans, fontSize:12, color:T.text3, padding:'16px 0' }}>No upcoming meetings scheduled.</div>
-              )}
-              {upcomingMeetings.map((m, i) => (
-                <div key={m.id} className="edit-row accordion-row"
-                  onClick={() => !editMode && setActiveMeeting(m)}
-                  style={{
-                    display:'flex', gap:16, alignItems:'center', padding:'14px 0',
-                    borderBottom: i < upcomingMeetings.length - 1 ? `1px solid ${T.borderHair}` : 'none',
-                    cursor: editMode ? 'default' : 'pointer',
-                  }}
-                  onMouseEnter={e=>{ if(!editMode) e.currentTarget.style.background=T.bgAlt; }}
-                  onMouseLeave={e=>{ e.currentTarget.style.background='transparent'; }}>
-                  {/* Date badge */}
-                  <div style={{ flexShrink:0, width:36, textAlign:'center' }}>
-                    <div style={{ fontFamily:T.serif, fontSize:16, fontWeight:500, color:T.accent, lineHeight:1 }}>{pd(m.date).getDate()}</div>
-                    <div style={{ fontFamily:T.sans, fontSize:7, color:T.text3, textTransform:'uppercase', letterSpacing:'0.1em', marginTop:2 }}>{pd(m.date).toLocaleString('en',{month:'short'})}</div>
-                  </div>
-                  {/* Content */}
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontFamily:T.sans, fontSize:13, fontWeight:600, color:T.text1 }}>{m.title}</div>
-                    <div style={{ fontFamily:T.sans, fontSize:9, color:T.text3, marginTop:2 }}>{m.type}{m.time ? ` · ${m.time}` : ''}</div>
-                  </div>
-                  {/* Right */}
-                  <div style={{ display:'flex', gap:8, alignItems:'center', flexShrink:0 }}>
-                    {m.paymentDue && (
-                      <span style={{ display:'inline-flex', alignItems:'center', gap:4, padding:'3px 8px', borderRadius:3, fontSize:7, fontWeight:700, letterSpacing:'0.08em', textTransform:'uppercase', color:'#7B4F1A', background:'#FDF0DC', border:'1px solid #C9A96E60', whiteSpace:'nowrap', fontFamily:T.sans }}>
-                        💳 Payment Due
-                      </span>
-                    )}
-                    {m.inPerson && (
-                      <span style={{ padding:'4px 10px', background:'#FAF0E6', color:'#8A5A2A', borderRadius:3, fontSize:8, fontWeight:700, fontFamily:T.sans, letterSpacing:'0.06em', border:'1px solid #EAD2B0', whiteSpace:'nowrap' }}>
-                        📍 In-Person
-                      </span>
-                    )}
-                    {m.gmeetLink && (
-                      <a href={m.gmeetLink} target="_blank" rel="noopener noreferrer" onClick={e=>e.stopPropagation()}
-                        style={{ padding:'4px 10px', background:m.gmeetLink.includes('zoom.us')?'#EBF5FB':'#F0FAF0', color:m.gmeetLink.includes('zoom.us')?'#1A6B9A':'#2E7D32', borderRadius:3, fontSize:8, fontWeight:700, fontFamily:T.sans, letterSpacing:'0.06em', textDecoration:'none', border:`1px solid ${m.gmeetLink.includes('zoom.us')?'#BEE3F8':'#C8E6C9'}`, whiteSpace:'nowrap' }}>
-                        {m.gmeetLink.includes('zoom.us') ? 'Join Zoom' : 'Join Meet'}
-                      </a>
-                    )}
-                    <Pill color={cTextColor(m.status)} bg={cBg(m.status)} size={7}>{m.status}</Pill>
-                    {editMode ? <EditBadge onClick={() => openEdit('meeting', m)} /> : <span style={{ color:T.text3, fontSize:14 }}>›</span>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {meetingTab === 'past' && (
-            <div>
-              {pastMeetings.length === 0 && (
-                <div style={{ fontFamily:T.sans, fontSize:12, color:T.text3, padding:'16px 0' }}>No past meetings yet.</div>
-              )}
-              {(showAllPast ? pastMeetings : pastMeetings.slice(0, 3)).map((m, i, arr) => (
-                <div key={m.id} className="edit-row accordion-row"
-                  onClick={() => !editMode && setActiveMeeting(m)}
-                  style={{
-                    display:'flex', gap:16, alignItems:'center', padding:'12px 0',
-                    borderBottom: i < arr.length - 1 ? `1px solid ${T.borderHair}` : 'none',
-                    cursor: editMode ? 'default' : 'pointer',
-                    opacity:0.65,
-                  }}
-                  onMouseEnter={e=>{ e.currentTarget.style.opacity='0.9'; if(!editMode) e.currentTarget.style.background=T.bgAlt; }}
-                  onMouseLeave={e=>{ e.currentTarget.style.opacity='0.65'; e.currentTarget.style.background='transparent'; }}>
-                  <div style={{ flexShrink:0, width:36, textAlign:'center' }}>
-                    <div style={{ fontFamily:T.serif, fontSize:15, fontWeight:500, color:T.text3, lineHeight:1 }}>{pd(m.date).getDate()}</div>
-                    <div style={{ fontFamily:T.sans, fontSize:7, color:T.text3, textTransform:'uppercase', letterSpacing:'0.08em', marginTop:2 }}>{pd(m.date).toLocaleString('en',{month:'short'})}</div>
-                  </div>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontFamily:T.sans, fontSize:12, fontWeight:500, color:T.text2 }}>{m.title}</div>
-                    <div style={{ fontFamily:T.sans, fontSize:9, color:T.text3, marginTop:2 }}>{m.type}</div>
-                  </div>
-                  <div style={{ display:'flex', gap:8, alignItems:'center', flexShrink:0 }}>
-                    {editMode ? <EditBadge onClick={() => openEdit('meeting', m)} /> : <span style={{ fontFamily:T.sans, fontSize:9, color:T.text3 }}>View notes ›</span>}
-                  </div>
-                </div>
-              ))}
-              {!showAllPast && pastMeetings.length > 3 && (
-                <button onClick={() => setShowAllPast(true)}
-                  style={{ background:'none', border:'none', cursor:'pointer', fontFamily:T.sans, fontSize:9, color:T.accent, padding:'12px 0', letterSpacing:'0.04em' }}>
-                  Show all ({pastMeetings.length}) →
-                </button>
-              )}
-            </div>
-          )}
-        </section>
-
-        {/* ════════════════════════════════
             DELIVERABLES (id="deliverables")
         ════════════════════════════════ */}
         <section id="deliverables" style={{ paddingTop:48, paddingBottom:48, borderBottom:`1px solid ${T.borderHair}` }}>
@@ -1970,176 +2140,6 @@ function App() {
               </div>
             );
           })}
-        </section>
-
-        {/* ════════════════════════════════
-            CALENDAR (id="calendar")
-        ════════════════════════════════ */}
-        <section id="calendar" style={{ paddingTop:48, paddingBottom:48, borderBottom:`1px solid ${T.borderHair}` }}>
-          {(() => {
-            const today      = new Date(); today.setHours(0,0,0,0);
-            const year       = calMonth.getFullYear();
-            const month      = calMonth.getMonth();
-            const daysInMonth= new Date(year, month+1, 0).getDate();
-            const firstDow   = new Date(year, month, 1).getDay();
-            const cells      = [...Array(firstDow).fill(null), ...Array.from({length:daysInMonth},(_,i)=>i+1)];
-            while (cells.length % 7 !== 0) cells.push(null);
-            const weeks = [];
-            for (let i=0; i<cells.length; i+=7) weeks.push(cells.slice(i,i+7));
-            const fmt2   = n => String(n).padStart(2,'0');
-            const toDate = d => d ? `${year}-${fmt2(month+1)}-${fmt2(d)}` : null;
-            const prevMonth = new Date(year, month-1, 1);
-            const nextMonth = new Date(year, month+1, 1);
-            const DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-            const mtgByDay = {};
-            meetings.forEach(m => { if (m.date) (mtgByDay[m.date] = mtgByDay[m.date]||[]).push(m); });
-            const presByDay = {};
-            effectivePresentations.forEach(p => { if (p.date) (presByDay[p.date] = presByDay[p.date]||[]).push(p); });
-            return (
-              <div>
-                {/* Nav row */}
-                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:24 }}>
-                  <div style={{ display:'flex', alignItems:'center', gap:14 }}>
-                    <button onClick={() => setCalMonth(prevMonth)}
-                      style={{ background:'none', border:`1px solid ${T.border}`, borderRadius:6, width:30, height:30, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', color:T.text1, fontSize:15 }}>‹</button>
-                    <span style={{ fontFamily:T.serif, fontSize:24, fontWeight:500, color:T.text1, minWidth:200 }}>
-                      {calMonth.toLocaleString('en',{month:'long', year:'numeric'})}
-                    </span>
-                    <button onClick={() => setCalMonth(nextMonth)}
-                      style={{ background:'none', border:`1px solid ${T.border}`, borderRadius:6, width:30, height:30, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', color:T.text1, fontSize:15 }}>›</button>
-                  </div>
-                  <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-                    <button onClick={() => setCalMonth(new Date(today.getFullYear(), today.getMonth(), 1))}
-                      style={{ background:'none', border:`1px solid ${T.border}`, borderRadius:20, padding:'5px 14px', fontFamily:T.sans, fontSize:8, fontWeight:600, color:T.text2, cursor:'pointer', letterSpacing:'0.06em' }}>
-                      Today
-                    </button>
-                    {editMode && (
-                      <button className="add-btn" onClick={() => openAdd('calband', { label:'', start:'', end:'', color:BAND_COLORS[0] })}
-                        style={{ border:`1px dashed ${T.accent}70`, color:T.accent, padding:'5px 12px' }}>
-                        + Add Band
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Legend */}
-                {calBands.length > 0 && (
-                  <div style={{ display:'flex', flexWrap:'wrap', gap:10, marginBottom:18 }}>
-                    {calBands.map(b => (
-                      <div key={b.id} style={{ display:'flex', alignItems:'center', gap:6 }}>
-                        <div style={{ width:10, height:10, borderRadius:'50%', background:b.color }} />
-                        <span style={{ fontFamily:T.sans, fontSize:9, color:T.text2 }}>{b.label}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Grid */}
-                <div style={{ border:`1px solid ${T.border}`, borderRadius:6, overflow:'hidden' }}>
-                  {/* DOW header */}
-                  <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)', background:T.bgAlt, borderBottom:`1px solid ${T.border}` }}>
-                    {DOW.map(d => (
-                      <div key={d} style={{ padding:'9px 12px', fontFamily:T.sans, fontSize:8, fontWeight:700, letterSpacing:'0.14em', textTransform:'uppercase', color:T.text3 }}>{d}</div>
-                    ))}
-                  </div>
-
-                  {/* Weeks */}
-                  {weeks.map((week, wi) => {
-                    const weekStart = toDate(week.find(d=>d));
-                    const weekEnd   = toDate([...week].reverse().find(d=>d));
-                    const activeBands = calBands.filter(b => b.start && b.end && b.label && weekStart && weekEnd && b.start <= weekEnd && b.end >= weekStart);
-                    return (
-                      <div key={wi} style={{ borderBottom: wi < weeks.length-1 ? `1px solid ${T.border}` : 'none' }}>
-                        {/* Day cells */}
-                        <div style={{ display:'grid', gridTemplateColumns:'repeat(7,1fr)' }}>
-                          {week.map((day, di) => {
-                            const ds      = toDate(day);
-                            const dayMtgs = ds ? (mtgByDay[ds]||[]) : [];
-                            const dayPres = ds ? (presByDay[ds]||[]) : [];
-                            const isToday = day && today.getFullYear()===year && today.getMonth()===month && today.getDate()===day;
-                            return (
-                              <div key={di} style={{
-                                minHeight:90, padding:'8px 10px',
-                                borderRight: di < 6 ? `1px solid ${T.border}` : 'none',
-                                background: isToday ? T.accentBg : !day ? T.bgAlt : T.surface,
-                                opacity: !day ? 0.5 : 1,
-                              }}>
-                                {day && (
-                                  <>
-                                    <div style={isToday ? {
-                                      width:22, height:22, borderRadius:'50%', background:T.accent,
-                                      display:'flex', alignItems:'center', justifyContent:'center',
-                                      fontFamily:T.sans, fontSize:10, fontWeight:700, color:'#fff', marginBottom:6,
-                                    } : {
-                                      fontFamily:T.sans, fontSize:11, fontWeight:500, color:T.text3, marginBottom:4,
-                                    }}>{day}</div>
-                                    {dayPres.map(p => (
-                                      <div key={p.id} style={{
-                                        background: p.status==='Done' ? T.bgAlt : T.accentBg,
-                                        color: p.status==='Done' ? T.text3 : T.accent,
-                                        border: `1px solid ${T.accent}44`,
-                                        borderRadius:3, padding:'3px 6px', marginBottom:3,
-                                        fontFamily:T.sans, fontSize:8, fontWeight:700, lineHeight:1.3, letterSpacing:'0.04em',
-                                      }}>★ {p.title}</div>
-                                    ))}
-                                    {dayMtgs.map(m => (
-                                      <div key={m.id} onClick={() => setActiveMeeting(m)} style={{
-                                        background: m.status==='Done' ? T.bgAlt : T.accent,
-                                        color:      m.status==='Done' ? T.text3 : '#fff',
-                                        opacity:    m.status==='Done' ? 0.55 : 1,
-                                        border:     m.status==='Done' ? `1px solid ${T.border}` : 'none',
-                                        borderRadius:3, padding:'3px 6px', marginBottom:3,
-                                        fontFamily:T.sans, fontSize:8, fontWeight:600, lineHeight:1.3, cursor:'pointer',
-                                      }}>{m.title}</div>
-                                    ))}
-                                  </>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-
-                        {/* Band rows */}
-                        {activeBands.map(b => {
-                          let startCol = 7, endCol = -1;
-                          week.forEach((day, di) => {
-                            const ds = toDate(day);
-                            if (ds && ds >= b.start && ds <= b.end) { startCol = Math.min(startCol, di); endCol = Math.max(endCol, di); }
-                          });
-                          if (endCol < 0) return null;
-                          const leftPct  = (startCol / 7 * 100).toFixed(2);
-                          const widthPct = ((endCol - startCol + 1) / 7 * 100).toFixed(2);
-                          const isFirstWeek = b.start >= weekStart;
-                          const isLastWeek  = b.end   <= weekEnd;
-                          return (
-                            <div key={b.id}
-                              onClick={() => editMode && openEdit('calband', b)}
-                              style={{ position:'relative', height:30, borderTop:`1px solid ${T.borderHair}`, cursor: editMode ? 'pointer' : 'default' }}>
-                              <div style={{
-                                position:'absolute', top:4, bottom:4,
-                                left:`calc(${leftPct}% + 6px)`,
-                                width:`calc(${widthPct}% - 12px)`,
-                                background: b.color + '22',
-                                border:`1.5px solid ${b.color}66`,
-                                borderRadius:`${isFirstWeek?5:0}px ${isLastWeek?5:0}px ${isLastWeek?5:0}px ${isFirstWeek?5:0}px`,
-                                display:'flex', alignItems:'center', gap:7, paddingLeft:10, paddingRight:8,
-                              }}>
-                                <div style={{ width:7, height:7, borderRadius:'50%', background:b.color, flexShrink:0 }} />
-                                <span style={{ fontFamily:T.sans, fontSize:9, fontWeight:600, color:b.color, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', flex:1 }}>
-                                  {isFirstWeek || startCol === 0 ? b.label : ''}
-                                </span>
-                                {editMode && <span style={{ fontFamily:T.sans, fontSize:7, color:b.color, opacity:0.6 }}>✏</span>}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })()}
         </section>
 
         {/* ════════════════════════════════
