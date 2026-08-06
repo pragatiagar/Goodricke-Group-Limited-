@@ -1164,7 +1164,7 @@ function App() {
       const linked = n ? meetings.find(m => m.id === 'm' + n) : null;
       if (!linked) return p;
       const status = linked.status === 'Done' ? 'Done' : linked.status === 'Scheduled' ? 'Scheduled' : 'Pending';
-      const date = linked.date || p.date;
+      const date = p.date || linked.date;
       return (status !== p.status || date !== p.date) ? { ...p, status, date } : p;
     });
   }, [presentations, meetings]);
@@ -1249,7 +1249,7 @@ function App() {
         const n = draft.id.match(/^m(\d+)$/)?.[1];
         if (n) {
           const msStatus = draft.status === 'Done' ? 'Done' : draft.status === 'Scheduled' ? 'Scheduled' : 'Pending';
-          setPresentations(p => p.map(x => x.id === 'ms'+n ? { ...x, date: draft.date || x.date, status: msStatus } : x));
+          setPresentations(p => p.map(x => x.id === 'ms'+n ? { ...x, date: draft.date || x.date, status: msStatus, notes: draft.title || x.notes } : x));
         }
       }
     }
