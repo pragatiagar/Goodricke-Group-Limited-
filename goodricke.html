@@ -1164,8 +1164,9 @@ function App() {
       const linked = n ? meetings.find(m => m.id === 'm' + n) : null;
       if (!linked) return p;
       const status = linked.status === 'Done' ? 'Done' : linked.status === 'Scheduled' ? 'Scheduled' : 'Pending';
-      const date = p.date || linked.date;
-      return (status !== p.status || date !== p.date) ? { ...p, status, date } : p;
+      const date  = p.date  || linked.date;
+      const notes = linked.title || p.notes;
+      return { ...p, status, date, notes };
     });
   }, [presentations, meetings]);
 
