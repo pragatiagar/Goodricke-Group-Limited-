@@ -1230,7 +1230,15 @@ function App() {
   const currentPhase    = getCurrentPhase(effectivePhases);
   const clientSt        = currentPhase ? (INTERNAL_TO_CLIENT[currentPhase.status] || 'In Progress') : 'In Progress';
   const clientPhaseName = currentPhase ? (currentPhase.clientName || currentPhase.name) : '';
-  const nextMilestone   = getNextMilestone(effectivePresentations);
+  const nextMilestone   = (() => {
+    const today = new Date(); today.setHours(0,0,0,0);
+    // linked meetings (m1, m2, …) are already represented by effectivePresentations — exclude them to avoid duplicates
+    const extraMeetings = meetings
+      .filter(m => !/^m\d+$/.test(m.id) && m.status !== 'Done' && pd(m.date) >= today)
+      .map(m => ({ ...m, notes: m.title }));
+    return [...effectivePresentations.filter(e => (e.status === 'Scheduled' || e.status === 'Pending') && pd(e.date) >= today), ...extraMeetings]
+      .sort((a,b) => pd(a.date)-pd(b.date))[0] || null;
+  })();
   const pendingDeps     = deps.filter(d => d.status !== 'Completed').length;
   const today0 = (() => { const d = new Date(); d.setHours(0,0,0,0); return d; })();
   const upcomingMeetings = meetings.filter(m => m.status !== 'Done' && pd(m.date) >= today0).sort((a,b) => pd(a.date)-pd(b.date));
